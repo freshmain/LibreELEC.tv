@@ -31,6 +31,16 @@ PKG_LONGDESC="Kodi Media Center (which was formerly named Xbox Media Center or X
 PKG_IS_ADDON="no"
 PKG_AUTORECONF="no"
 
+case $PROJECT in
+  S805|S905|S912)
+    PKG_PATCH_DIRS="amlogic-sX05"
+    if [ "$TARGET_ARCH" = "arm" ]; then
+      CFLAGS="$CFLAGS -mthumb"
+      CXXFLAGS="$CXXFLAGS -mthumb"
+    fi
+    ;;
+esac
+
 PKG_CMAKE_SCRIPT="$PKG_BUILD/project/cmake/CMakeLists.txt"
 
   get_graphicdrivers
@@ -352,6 +362,12 @@ post_makeinstall_target() {
   fi
 
   debug_strip $INSTALL/usr/lib/kodi/kodi.bin
+
+  case $PROJECT in
+    S805|S905|S912)
+      cp $PKG_DIR/scripts/aml-hdmimonitor.sh $INSTALL/usr/lib/kodi/aml-hdmimonitor.sh
+      ;;
+  esac
 }
 
 post_install() {
@@ -364,4 +380,10 @@ post_install() {
   enable_service kodi-waitonnetwork.service
   enable_service kodi.service
   enable_service kodi-lirc-suspend.service
+
+  case $PROJECT in
+    S805|S905|S912)
+      enable_service kodi-aml-hdmimonitor.service
+      ;;
+  esac
 }

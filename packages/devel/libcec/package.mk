@@ -17,7 +17,7 @@
 ################################################################################
 
 PKG_NAME="libcec"
-PKG_VERSION="2fc92b5"
+PKG_VERSION="f2c4ca7"
 PKG_ARCH="any"
 PKG_LICENSE="GPL"
 PKG_SITE="http://libcec.pulse-eight.com/"
@@ -46,7 +46,7 @@ else
 fi
 
 if [ "$KODIPLAYER_DRIVER" = "libamcodec" ]; then
-  if [ "$TARGET_ARCH" = "aarch64" ]; then
+  if [ "$TARGET_KERNEL_ARCH" = "arm64" ]; then
     PKG_CMAKE_OPTS_TARGET="$PKG_CMAKE_OPTS_TARGET -DHAVE_AOCEC_API=1"
   else
     PKG_CMAKE_OPTS_TARGET="$PKG_CMAKE_OPTS_TARGET -DHAVE_AMLOGIC_API=1"
