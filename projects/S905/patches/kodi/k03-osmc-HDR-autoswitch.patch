@@ -1,0 +1,101 @@
+From 7a08239c9d1776b519bf35e905f5e5bd94deb6b4 Mon Sep 17 00:00:00 2001
+From: Sam Nazarko <email@samnazarko.co.uk>
+Date: Thu, 12 Apr 2018 01:06:03 +0100
+Subject: [PATCH] Add support for HDR autoswitching
+
+Signed-off-by: Sam Nazarko <email@samnazarko.co.uk>
+---
+ xbmc/cores/VideoPlayer/DVDCodecs/Video/AMLCodec.cpp   |  7 +++++++
+ xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemux.h         |  2 ++
+ xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp |  5 +++++
+ xbmc/cores/VideoPlayer/DVDStreamInfo.cpp              |  1 +
+ xbmc/cores/VideoPlayer/DVDStreamInfo.h                |  1 +
+ 5 files changed, 34 insertions(+)
+
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/AMLCodec.cpp b/xbmc/cores/VideoPlayer/DVDCodecs/Video/AMLCodec.cpp
+index 56bcc6b..feaf5d2 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/AMLCodec.cpp
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/AMLCodec.cpp
+@@ -1746,6 +1746,11 @@ bool CAMLCodec::OpenDecoder(CDVDStreamInfo &hints)
+       am_private->gcodec.param  = (void*)EXTERNAL_PTS;
+       if (m_hints.ptsinvalid)
+         am_private->gcodec.param = (void*)(EXTERNAL_PTS | SYNC_OUTSIDE);
++      if (m_hints.is2020 && CSettings::GetInstance().GetBool(CSettings::SETTING_AMLOGIC_COLORSPACE))
++      {
++	 CLog::Log(LOGDEBUG, "BT2020 auto switch is enabled");
++	 SysfsUtils::SetString("/sys/class/amhdmitx/amhdmitx0/attr", "444,10bit");
++      }
+       break;
+     case VFORMAT_VP9:
+       am_private->gcodec.format = VIDEO_DEC_FORMAT_VP9;
+@@ -1890,6 +1895,8 @@ void CAMLCodec::CloseAmlVideo()
+ {
+   m_amlVideoFile.reset();
+   SetVfmMap("default", m_defaultVfmMap);
++  if (CSettings::GetInstance().GetBool(CSettings::SETTING_AMLOGIC_COLORSPACE))
++    SysfsUtils::SetString("/sys/class/amhdmitx/amhdmitx0/attr", "reset");
+ }
+ 
+ void CAMLCodec::Reset()
+diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemux.h b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemux.h
+index 3bb003b..8d38532 100644
+--- a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemux.h
++++ b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemux.h
+@@ -157,6 +157,7 @@ public:
+     type = STREAM_VIDEO;
+     iOrientation = 0;
+     iBitsPerPixel = 0;
++    is2020 = false;
+   }
+ 
+   virtual ~CDemuxStreamVideo() {}
+@@ -171,6 +172,7 @@ public:
+   int iOrientation; // orientation of the video in degress counter clockwise
+   int iBitsPerPixel;
+   std::string stereo_mode; // expected stereo mode
++  bool is2020;
+ };
+ 
+ class CDemuxStreamAudio : public CDemuxStream
+diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp
+index e3a7330..4eed32a 100644
+--- a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp
++++ b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp
+@@ -1408,6 +1408,11 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
+         st->fAspect = SelectAspect(pStream, st->bForcedAspect) * pStream->codec->width / pStream->codec->height;
+         st->iOrientation = 0;
+         st->iBitsPerPixel = pStream->codec->bits_per_coded_sample;
++	if (pStream->codec->color_primaries == 9 || pStream->codec->color_primaries == 14 || pStream->codec->color_primaries == 15)
++	{
++	  CLog::Log(LOGDEBUG, "This is BT2020 content");
++	  st->is2020 = true;
++	}
+ 
+         AVDictionaryEntry *rtag = av_dict_get(pStream->metadata, "rotate", NULL, 0);
+         if (rtag) 
+diff --git a/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp b/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp
+index e59c84c..d7a8a52 100644
+--- a/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp
++++ b/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp
+@@ -233,6 +233,7 @@ void CDVDStreamInfo::Assign(const CDemuxStream& right, bool withextradata)
+     orientation = stream->iOrientation;
+     bitsperpixel = stream->iBitsPerPixel;
+     stereo_mode = stream->stereo_mode;
++    is2020 = stream->is2020;
+   }
+   else if(  right.type == STREAM_SUBTITLE )
+   {
+diff --git a/xbmc/cores/VideoPlayer/DVDStreamInfo.h b/xbmc/cores/VideoPlayer/DVDStreamInfo.h
+index f141708..b9b5b38 100644
+--- a/xbmc/cores/VideoPlayer/DVDStreamInfo.h
++++ b/xbmc/cores/VideoPlayer/DVDStreamInfo.h
+@@ -72,6 +72,7 @@ public:
+   bool forced_aspect; // aspect is forced from container
+   int orientation; // orientation of the video in degress counter clockwise
+   int bitsperpixel;
++  bool is2020;
+   std::string stereo_mode; // stereoscopic 3d mode
+ 
+   // AUDIO
+-- 
+2.7.4

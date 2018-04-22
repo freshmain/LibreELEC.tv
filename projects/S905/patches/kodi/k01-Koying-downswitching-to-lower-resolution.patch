@@ -1,0 +1,315 @@
+From a0c8916f1a7bd4d19dc38d6cd9af569fd753c59c Mon Sep 17 00:00:00 2001
+From: "Chris \"Koying\" Browet" <cbro@semperpax.com>
+Date: Sat, 2 Dec 2017 11:54:24 +0100
+Subject: [PATCH] CHG: Allow to downgrade resolution
+
+---
+ xbmc/guilib/Resolution.cpp | 75 +++++++++++++++++-----------------------------
+ 1 file changed, 28 insertions(+), 47 deletions(-)
+
+diff --git a/xbmc/guilib/Resolution.cpp b/xbmc/guilib/Resolution.cpp
+index 8c19be8151..ea0fd2b0fe 100644
+--- a/xbmc/guilib/Resolution.cpp
++++ b/xbmc/guilib/Resolution.cpp
+@@ -225,68 +225,49 @@ RESOLUTION CResolutionUtils::FindClosestResolution(float fps, int width, bool is
+       // concerning dimension and refreshrate weight
+       // skip lower resolutions
+       // don't change resolutions when 3D is wanted
+-      if ((width < orig.iScreenWidth) || // orig res large enough
+-         (info.iScreenWidth < orig.iScreenWidth) || // new res is smaller
+-         (info.iScreenHeight < orig.iScreenHeight) || // new height would be smaller
++      if ((info.iScreenWidth < 1280) || // ignore < 720p
++         (info.iScreenHeight < 720) || // ignore < 720p
+          (info.dwFlags & D3DPRESENTFLAG_MODEMASK) != (curr.dwFlags & D3DPRESENTFLAG_MODEMASK) || // don't switch to interlaced modes
+-         (info.iScreen != curr.iScreen) || // skip not current displays
+-         is3D) // skip res changing when doing 3D
++         (info.iScreen != curr.iScreen)) // skip not current displays
+       {
+         continue;
+       }
+     }
+ 
+-    // Allow switching to larger resolution:
++    // Allow switching to a matching resolution:
+     // e.g. if m_sourceWidth == 3840 and we have a 3840 mode - use this one
+     // if it has a matching fps mode, which is evaluated below
+ 
+     loop_diff = std::abs(width - info.iScreenWidth);
+     curr_diff = std::abs(width - curr.iScreenWidth);
+ 
+-    // For 3D choose the closest refresh rate
+-    if (is3D)
+-    {
+-      float diff = (info.fRefreshRate - fRefreshRate);
+-      if(diff < 0)
+-        diff *= -1.0f;
++    int c_weight = MathUtils::round_int(RefreshWeight(curr.fRefreshRate, fRefreshRate * multiplier) * 10000.0);
++    int i_weight = MathUtils::round_int(RefreshWeight(info.fRefreshRate, fRefreshRate * multiplier) * 10000.0);
+ 
+-      if(diff < last_diff)
+-      {
+-        last_diff = diff;
+-        current = (RESOLUTION)i;
+-        curr = info;
+-      }
++    RESOLUTION current_bak = current;
++    RESOLUTION_INFO curr_bak = curr;
++
++    // Closer the better, prefer higher refresh rate if the same
++    if ((i_weight < c_weight) ||
++        (i_weight == c_weight && info.fRefreshRate > curr.fRefreshRate))
++    {
++      current = (RESOLUTION)i;
++      curr = info;
+     }
+-    else
++    // use case 1080p50 vs 3840x2160@25 for 3840@25 content
++    // prefer the higher resolution of 3840
++    if (i_weight == c_weight && (loop_diff < curr_diff))
+     {
+-      int c_weight = MathUtils::round_int(RefreshWeight(curr.fRefreshRate, fRefreshRate * multiplier) * 10000.0);
+-      int i_weight = MathUtils::round_int(RefreshWeight(info.fRefreshRate, fRefreshRate * multiplier) * 10000.0);
+-
+-      RESOLUTION current_bak = current;
+-      RESOLUTION_INFO curr_bak = curr;
+-
+-      // Closer the better, prefer higher refresh rate if the same
+-      if ((i_weight < c_weight) ||
+-          (i_weight == c_weight && info.fRefreshRate > curr.fRefreshRate))
+-      {
+-        current = (RESOLUTION)i;
+-        curr = info;
+-      }
+-      // use case 1080p50 vs 3840x2160@25 for 3840@25 content
+-      // prefer the higher resolution of 3840
+-      if (i_weight == c_weight && (loop_diff < curr_diff))
+-      {
+-        current = (RESOLUTION)i;
+-        curr = info;
+-      }
+-      // same as above but iterating with 3840@25 set and overwritten
+-      // by e.g. 1080@50 - restore backup in that case
+-      // to give priority to the better matching width
+-      if (i_weight == c_weight && (loop_diff > curr_diff))
+-      {
+-        current = current_bak;
+-        curr = curr_bak;
+-      }
++      current = (RESOLUTION)i;
++      curr = info;
++    }
++    // same as above but iterating with 3840@25 set and overwritten
++    // by e.g. 1080@50 - restore backup in that case
++    // to give priority to the better matching width
++    if (i_weight == c_weight && (loop_diff > curr_diff))
++    {
++      current = current_bak;
++      curr = curr_bak;
+     }
+   }
+ 
+From ecf2f2ebfcfdd8b220b64053be998b9f8130d06b Mon Sep 17 00:00:00 2001
+From: "Chris \"Koying\" Browet" <cbro@semperpax.com>
+Date: Sat, 2 Dec 2017 11:54:24 +0100
+Subject: [PATCH] CHG: Allow to downgrade resolution
+
+---
+ xbmc/guilib/Resolution.cpp | 35 ++++++-----------------------------
+ 1 file changed, 6 insertions(+), 29 deletions(-)
+
+diff --git a/xbmc/guilib/Resolution.cpp b/xbmc/guilib/Resolution.cpp
+index ea0fd2b0fe..e11507e8b4 100644
+--- a/xbmc/guilib/Resolution.cpp
++++ b/xbmc/guilib/Resolution.cpp
+@@ -203,9 +203,8 @@ RESOLUTION CResolutionUtils::FindClosestResolution(float fps, int width, bool is
+ 
+   float fRefreshRate = fps;
+ 
+-  float last_diff = fRefreshRate;
+-
+   int curr_diff = std::abs(width - curr.iScreenWidth);
++  int c_weight = MathUtils::round_int(RefreshWeight(curr.fRefreshRate, fRefreshRate * multiplier) * 10000.0);
+   int loop_diff = 0;
+ 
+   // Find closest refresh rate
+@@ -239,43 +238,21 @@ RESOLUTION CResolutionUtils::FindClosestResolution(float fps, int width, bool is
+     // if it has a matching fps mode, which is evaluated below
+ 
+     loop_diff = std::abs(width - info.iScreenWidth);
+-    curr_diff = std::abs(width - curr.iScreenWidth);
+-
+-    int c_weight = MathUtils::round_int(RefreshWeight(curr.fRefreshRate, fRefreshRate * multiplier) * 10000.0);
+     int i_weight = MathUtils::round_int(RefreshWeight(info.fRefreshRate, fRefreshRate * multiplier) * 10000.0);
+ 
+-    RESOLUTION current_bak = current;
+-    RESOLUTION_INFO curr_bak = curr;
+-
+     // Closer the better, prefer higher refresh rate if the same
+     if ((i_weight < c_weight) ||
+-        (i_weight == c_weight && info.fRefreshRate > curr.fRefreshRate))
+-    {
+-      current = (RESOLUTION)i;
+-      curr = info;
+-    }
+-    // use case 1080p50 vs 3840x2160@25 for 3840@25 content
+-    // prefer the higher resolution of 3840
+-    if (i_weight == c_weight && (loop_diff < curr_diff))
++        (i_weight == c_weight && info.fRefreshRate > curr.fRefreshRate) ||
++        (i_weight == c_weight && info.fRefreshRate == curr.fRefreshRate && loop_diff < curr_diff))
+     {
+       current = (RESOLUTION)i;
+       curr = info;
+-    }
+-    // same as above but iterating with 3840@25 set and overwritten
+-    // by e.g. 1080@50 - restore backup in that case
+-    // to give priority to the better matching width
+-    if (i_weight == c_weight && (loop_diff > curr_diff))
+-    {
+-      current = current_bak;
+-      curr = curr_bak;
++      curr_diff = std::abs(width - curr.iScreenWidth);
++      c_weight = MathUtils::round_int(RefreshWeight(curr.fRefreshRate, fRefreshRate * multiplier) * 10000.0);
+     }
+   }
+ 
+-  // For 3D overwrite weight
+-  if (is3D)
+-    weight = 0;
+-  else
+-    weight = RefreshWeight(curr.fRefreshRate, fRefreshRate * multiplier);
++  weight = c_weight;
+ 
+   return current;
+ }
+
+From e2ba13c6aaadf30675915de71323f75b144827f7 Mon Sep 17 00:00:00 2001
+From: "Chris \"Koying\" Browet" <cbro@semperpax.com>
+Date: Mon, 4 Dec 2017 10:49:42 +0100
+Subject: [PATCH] FIXUP: [reso down] 2160p25 vs 1080p50 on HDMI 1.4
+
+---
+ xbmc/guilib/Resolution.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/xbmc/guilib/Resolution.cpp b/xbmc/guilib/Resolution.cpp
+index e11507e8b4..5138931b98 100644
+--- a/xbmc/guilib/Resolution.cpp
++++ b/xbmc/guilib/Resolution.cpp
+@@ -242,7 +242,7 @@ RESOLUTION CResolutionUtils::FindClosestResolution(float fps, int width, bool is
+ 
+     // Closer the better, prefer higher refresh rate if the same
+     if ((i_weight < c_weight) ||
+-        (i_weight == c_weight && info.fRefreshRate > curr.fRefreshRate) ||
++        (i_weight == c_weight && info.fRefreshRate > curr.fRefreshRate && loop_diff <= curr_diff) ||
+         (i_weight == c_weight && info.fRefreshRate == curr.fRefreshRate && loop_diff < curr_diff))
+     {
+       current = (RESOLUTION)i;
+
+From 4d794d5d60ec292606e2bed22dcd4136ed0c8787 Mon Sep 17 00:00:00 2001
+From: "Chris \"Koying\" Browet" <cbro@semperpax.com>
+Date: Sat, 9 Dec 2017 21:37:40 +0100
+Subject: [PATCH] FIXUP: [reso switcher] don't allow downgrades
+
+---
+ xbmc/guilib/Resolution.cpp | 21 ++++++++++++---------
+ 1 file changed, 12 insertions(+), 9 deletions(-)
+
+diff --git a/xbmc/guilib/Resolution.cpp b/xbmc/guilib/Resolution.cpp
+index 5138931b98..d5466ceceb 100644
+--- a/xbmc/guilib/Resolution.cpp
++++ b/xbmc/guilib/Resolution.cpp
+@@ -194,16 +194,13 @@ void CResolutionUtils::FindResolutionFromFpsMatch(float fps, int width, bool is3
+ RESOLUTION CResolutionUtils::FindClosestResolution(float fps, int width, bool is3D, float multiplier, RESOLUTION current, float& weight)
+ {
+   RESOLUTION_INFO curr = g_graphicsContext.GetResInfo(current);
+-  RESOLUTION orig_res  = CDisplaySettings::GetInstance().GetCurrentResolution();
+-
+-  if (orig_res <= RES_DESKTOP)
+-    orig_res = RES_DESKTOP;
+-
+-  RESOLUTION_INFO orig = g_graphicsContext.GetResInfo(orig_res);
+ 
+   float fRefreshRate = fps;
+ 
+-  int curr_diff = std::abs(width - curr.iScreenWidth);
++  int curr_diff = curr.iScreenWidth - width;
++  if (curr_diff < 0)
++    curr_diff = INT_MAX;
++
+   int c_weight = MathUtils::round_int(RefreshWeight(curr.fRefreshRate, fRefreshRate * multiplier) * 10000.0);
+   int loop_diff = 0;
+ 
+@@ -237,7 +234,13 @@ RESOLUTION CResolutionUtils::FindClosestResolution(float fps, int width, bool is
+     // e.g. if m_sourceWidth == 3840 and we have a 3840 mode - use this one
+     // if it has a matching fps mode, which is evaluated below
+ 
+-    loop_diff = std::abs(width - info.iScreenWidth);
++    loop_diff = info.iScreenWidth - width;
++    if (loop_diff < 0)
++    {
++      // Do not allow downscaling
++      continue;
++    }
++
+     int i_weight = MathUtils::round_int(RefreshWeight(info.fRefreshRate, fRefreshRate * multiplier) * 10000.0);
+ 
+     // Closer the better, prefer higher refresh rate if the same
+@@ -247,7 +250,7 @@ RESOLUTION CResolutionUtils::FindClosestResolution(float fps, int width, bool is
+     {
+       current = (RESOLUTION)i;
+       curr = info;
+-      curr_diff = std::abs(width - curr.iScreenWidth);
++      curr_diff = loop_diff;
+       c_weight = MathUtils::round_int(RefreshWeight(curr.fRefreshRate, fRefreshRate * multiplier) * 10000.0);
+     }
+   }
+
+From 1f9a682a658c197ff8cecee2d54ad48f9471062a Mon Sep 17 00:00:00 2001
+From: "Chris \"Koying\" Browet" <cbro@semperpax.com>
+Date: Wed, 13 Dec 2017 19:33:18 +0100
+Subject: [PATCH] FIXUP: [reso switcher] proper weight
+
+---
+ xbmc/guilib/Resolution.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/xbmc/guilib/Resolution.cpp b/xbmc/guilib/Resolution.cpp
+index d5466ceceb..4cbffeb177 100644
+--- a/xbmc/guilib/Resolution.cpp
++++ b/xbmc/guilib/Resolution.cpp
+@@ -255,7 +255,7 @@ RESOLUTION CResolutionUtils::FindClosestResolution(float fps, int width, bool is
+     }
+   }
+ 
+-  weight = c_weight;
++  weight = RefreshWeight(curr.fRefreshRate, fRefreshRate * multiplier);
+ 
+   return current;
+ }
+
+From bd5a9e5f4283495e6de5b2dab2cdf4d6c70c4fa6 Mon Sep 17 00:00:00 2001
+From: Chris Koying Browet <cbro@semperpax.com>
+Date: Fri, 15 Dec 2017 16:28:47 +0100
+Subject: [PATCH 7/7] FIXUP: [down reso] only consider 1080p for 3D
+
+---
+ xbmc/guilib/Resolution.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/xbmc/guilib/Resolution.cpp b/xbmc/guilib/Resolution.cpp
+index 22269ef..3fac916 100644
+--- a/xbmc/guilib/Resolution.cpp
++++ b/xbmc/guilib/Resolution.cpp
+@@ -223,6 +223,10 @@ RESOLUTION CResolutionUtils::FindClosestResolution(float fps, int width, bool is
+         (info.dwFlags & D3DPRESENTFLAG_MODEMASK) != (curr.dwFlags & D3DPRESENTFLAG_MODEMASK) ||
+         info.fRefreshRate < (fRefreshRate * multiplier / 1.001) - 0.001)
+     {
++      // If 3D, only consider 1080p
++      if (is3D && (info.iScreenWidth != 1920 || info.iScreenHeight != 1080))
++        continue;
++
+       // evaluate all higher modes and evalute them
+       // concerning dimension and refreshrate weight
+       // skip lower resolutions
+--- 
+2.7.4
