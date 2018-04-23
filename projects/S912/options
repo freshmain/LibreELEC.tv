@@ -48,10 +48,12 @@
   # Kernel to use. values can be:
   # default:  default mainline kernel
     LINUX="custom"
-    KERNEL_VERSION="79b5701"
-    KERNEL_URL="https://github.com/kszaq/linux-amlogic-le/archive/$KERNEL_VERSION.tar.gz"
-    KERNEL_SOURCE_DIR="linux-amlogic-le-$KERNEL_VERSION*"
+    KERNEL_VERSION="35398c4"
+    KERNEL_URL="https://github.com/wrxtasy/linux-amlogic/archive/$KERNEL_VERSION.tar.gz"
+    KERNEL_SOURCE_DIR="linux-amlogic-$KERNEL_VERSION*"
     KERNEL_PATCH_DIRS="amlogic-3.14"
+    BUILD_DATE=`date +%Y%m%d%H%M`
+    CUSTOM_VERSION="8.2.4.1"
 
 ################################################################################
 # setup build defaults
@@ -75,6 +77,9 @@
 
   # OpenGL-ES implementation to use (no / bcm2835-driver / gpu-viv-bin-mx6q / opengl-meson)
     OPENGLES="opengl-meson-t82x"
+
+  # Amlogic Meson SOC family (8 / 6 / gxbb)
+    MESON_FAMILY="gxm"
 
   # include uvesafb support (yes / no)
     UVESAFB_SUPPORT="no"
@@ -100,8 +105,8 @@
   # for a list of additinoal drivers see packages/linux-drivers
   # Space separated list is supported,
   # e.g. ADDITIONAL_DRIVERS="DRIVER1 DRIVER2"
-    ADDITIONAL_DRIVERS="RTL8192CU RTL8192DU RTL8192EU RTL8812AU gpu-aml-t8xx media_build \
-                        ap6xxx-aml mt7601u-aml mt7603u-aml qca9377-aml RTL8188EU-aml RTL8189ES-aml RTL8189FS-aml RTL8723BS-aml RTL8723DS-aml RTL8822BU-aml ssv6xxx-aml fd628-aml"
+    ADDITIONAL_DRIVERS="RTL8192CU RTL8192DU RTL8192EU RTL8812AU gpu-aml media_build \
+                        ap6xxx-aml mt7601u-aml qca9377-aml RTL8188EU-aml RTL8189ES-aml RTL8189FS-aml RTL8723BS-aml RTL8723DS-aml RTL8822BU-aml ssv6xxx-aml fd628-aml"
 
   # additional Firmware to use (dvb-firmware, misc-firmware, wlan-firmware)
   # Space separated list is supported,
