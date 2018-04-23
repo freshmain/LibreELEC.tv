@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <advancedsettings>
   <showexitbutton>false</showexitbutton>
+  <cputempcommand>cputemp</cputempcommand>
+  <gputempcommand>cputemp</gputempcommand>
 
   <samba>
-    <clienttimeout>30</clienttimeout>
+    <clienttimeout>20</clienttimeout>
   </samba>
+
+  <gui>
+    <algorithmdirtyregions>0</algorithmdirtyregions>
+  </gui>
 </advancedsettings>
